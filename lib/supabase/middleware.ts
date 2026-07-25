@@ -36,7 +36,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isProtectedRoute = ["/dashboard", "/scan"].some((route) =>
+  const isProtectedRoute = ["/dashboard", "/scan", "/history"].some((route) =>
     pathname.startsWith(route),
   );
 
@@ -68,4 +68,5 @@ export async function updateSession(request: NextRequest) {
 
   return response;
 }
+
 
