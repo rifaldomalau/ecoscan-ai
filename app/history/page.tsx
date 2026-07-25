@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { AppShell } from "@/components/app-shell";
 import { createClient } from "@/lib/supabase/server";
 
 import { HistoryList, type ScanHistoryItem } from "./history-list";
@@ -25,15 +26,16 @@ export default async function HistoryPage() {
   }
 
   const scans: ScanHistoryItem[] = data ?? [];
+  const avatarFallback = user.email?.charAt(0).toUpperCase() || "U";
 
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 sm:px-6 lg:px-8">
+    <AppShell
+      avatarFallback={avatarFallback}
+      eyebrow="History"
+      title="Scan History"
+    >
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <div className="flex flex-col gap-2">
-          <p className="text-sm text-muted-foreground">EcoScan AI</p>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Scan History
-          </h1>
           <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
             Review your previous waste analyses, sorted from newest to oldest.
           </p>
@@ -41,6 +43,6 @@ export default async function HistoryPage() {
 
         <HistoryList scans={scans} />
       </div>
-    </main>
+    </AppShell>
   );
 }

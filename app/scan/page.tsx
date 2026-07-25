@@ -3,6 +3,7 @@
 import { type ChangeEvent, type FormEvent, useState } from "react";
 import { ImageUp, Loader2, ScanLine, Type } from "lucide-react";
 
+import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -116,18 +117,12 @@ export default function ScanPage() {
   }
 
   return (
-    <main className="min-h-screen bg-muted/30 px-4 py-6 sm:px-6 lg:px-8">
+    <AppShell eyebrow="Scan Waste" title="Analyze Waste">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-        <div className="flex flex-col gap-2">
-          <p className="text-sm text-muted-foreground">EcoScan AI</p>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-            Scan Waste
-          </h1>
-          <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
-            Upload a waste image or enter the item name manually to analyze the
-            item.
-          </p>
-        </div>
+        <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
+          Upload a waste image or enter the item name manually to analyze the
+          item.
+        </p>
 
         <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
           <Card>
@@ -143,7 +138,7 @@ export default function ScanPage() {
                   <Label htmlFor="waste-image">Image upload</Label>
                   <div className="rounded-lg border border-dashed bg-background p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-center gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
                         <div className="flex size-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                           <ImageUp className="size-5" aria-hidden="true" />
                         </div>
@@ -292,6 +287,6 @@ export default function ScanPage() {
           </Card>
         ) : null}
       </div>
-    </main>
+    </AppShell>
   );
 }
