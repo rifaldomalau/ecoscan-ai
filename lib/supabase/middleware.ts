@@ -36,8 +36,11 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
+  const isProtectedRoute = ["/dashboard", "/scan"].some((route) =>
+    pathname.startsWith(route),
+  );
 
-  if (!user && pathname.startsWith("/dashboard")) {
+  if (!user && isProtectedRoute) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("redirectedFrom", pathname);
@@ -65,3 +68,4 @@ export async function updateSession(request: NextRequest) {
 
   return response;
 }
+
