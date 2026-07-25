@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useState } from "react";
-import { Clock3, Home, LogOut, Recycle, ScanLine } from "lucide-react";
+import { Clock3, Cpu, Home, LogOut, Recycle, ScanLine } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -25,6 +25,11 @@ const navigationItems = [
     label: "History",
     href: "/history",
     icon: Clock3,
+  },
+  {
+    label: "Tech Stack",
+    href: "/tech-stack",
+    icon: Cpu,
   },
 ];
 
