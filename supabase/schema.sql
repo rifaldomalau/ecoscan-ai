@@ -123,6 +123,11 @@ on public.eco_points
 for select
 using (auth.uid() = user_id);
 
+create policy "Users can insert own points"
+on public.eco_points
+for insert
+with check (auth.uid() = user_id);
+
 create policy "Users can update own points"
 on public.eco_points
 for update

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z, ZodError } from "zod";
 
 import { analyzeWaste } from "@/lib/ai/waste-analysis";
+import { calculateEcoScore, getEcoLevel } from "@/lib/eco-score";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -16,6 +17,13 @@ const scanHistoryInsertSchema = z.object({
   reuse_ideas: z.string().min(1),
   confidence: z.number().int().min(0).max(100),
   created_at: z.string().datetime(),
+});
+
+const ecoPointsUpsertSchema = z.object({
+  user_id: z.string().uuid(),
+  points: z.number().int().min(0),
+  level: z.enum(["Beginner", "Eco Explorer", "Eco Hero", "Earth Guardian"]),
+  updated_at: z.string().datetime(),
 });
 
 export async function POST(request: Request) {
@@ -61,6 +69,37 @@ export async function POST(request: Request) {
     if (insertError) {
       return NextResponse.json(
         { error: "Analysis completed, but saving the scan history failed." },
+        { status: 500 },
+      );
+    }
+
+    const { count, error: countError } = await supabase
+      .from("scan_history")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id);
+
+    if (countError || count === null) {
+      return NextResponse.json(
+        { error: "Scan saved, but updating eco score failed." },
+        { status: 500 },
+      );
+    }
+
+    const points = calculateEcoScore(count);
+    const ecoPointsRow = ecoPointsUpsertSchema.parse({
+      user_id: user.id,
+      points,
+      level: getEcoLevel(points),
+      updated_at: new Date().toISOString(),
+    });
+
+    const { error: ecoPointsError } = await supabase
+      .from("eco_points")
+      .upsert(ecoPointsRow, { onConflict: "user_id" });
+
+    if (ecoPointsError) {
+      return NextResponse.json(
+        { error: "Scan saved, but updating eco score failed." },
         { status: 500 },
       );
     }

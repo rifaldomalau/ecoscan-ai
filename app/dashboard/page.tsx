@@ -21,6 +21,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { calculateEcoScore, getEcoLevel } from "@/lib/eco-score";
 import { createClient } from "@/lib/supabase/server";
 
 const navigationItems = [
@@ -53,22 +54,6 @@ type ScanHistoryRecord = {
   created_at: string;
 };
 
-function getEcoLevel(score: number) {
-  if (score > 100) {
-    return "Earth Guardian";
-  }
-
-  if (score > 50) {
-    return "Eco Hero";
-  }
-
-  if (score > 20) {
-    return "Eco Explorer";
-  }
-
-  return "Beginner";
-}
-
 function formatScanDate(value?: string) {
   if (!value) {
     return "No scans yet";
@@ -97,20 +82,29 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const { data, error } = await supabase
-    .from("scan_history")
-    .select("item_name,category,recyclable,created_at")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+  const [scanHistoryResponse, ecoPointsResponse] = await Promise.all([
+    supabase
+      .from("scan_history")
+      .select("item_name,category,recyclable,created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("eco_points")
+      .select("points,level")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+  ]);
 
-  if (error) {
+  if (scanHistoryResponse.error || ecoPointsResponse.error) {
     throw new Error("Unable to load dashboard statistics.");
   }
 
-  const scans = (data ?? []) as ScanHistoryRecord[];
+  const scans = (scanHistoryResponse.data ?? []) as ScanHistoryRecord[];
   const totalScans = scans.length;
   const recyclableItems = scans.filter((scan) => scan.recyclable).length;
-  const ecoScore = totalScans;
+  const fallbackEcoScore = calculateEcoScore(totalScans);
+  const ecoScore = ecoPointsResponse.data?.points ?? fallbackEcoScore;
+  const ecoLevel = ecoPointsResponse.data?.level ?? getEcoLevel(ecoScore);
   const lastScan = scans[0];
   const hasScans = totalScans > 0;
   const categoryCounts = Object.entries(getCategoryCounts(scans));
@@ -126,7 +120,7 @@ export default async function DashboardPage() {
     {
       title: "Eco Score",
       value: ecoScore.toString(),
-      description: getEcoLevel(ecoScore),
+      description: ecoLevel,
       icon: Trophy,
     },
     {
@@ -310,3 +304,4 @@ export default async function DashboardPage() {
     </div>
   );
 }
+
