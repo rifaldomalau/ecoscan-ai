@@ -6,7 +6,7 @@ AI-powered waste classification and environmental education platform.
 
 EcoScan AI membantu pengguna mengidentifikasi jenis sampah menggunakan AI, memberikan panduan pembuangan yang benar, menjelaskan dampak lingkungan, serta memberikan ide penggunaan kembali barang agar lebih ramah lingkungan.
 
-Aplikasi ini dikembangkan sebagai Full-Stack MVP untuk IndonesiaNEXT Hackathon menggunakan Next.js, Supabase, dan OpenAI API.
+Aplikasi ini dikembangkan sebagai Full-Stack MVP untuk IndonesiaNEXT Hackathon menggunakan Next.js, Supabase, dan Google Gemini AI.
 
 ---
 
@@ -45,7 +45,7 @@ Aplikasi ini dikembangkan sebagai Full-Stack MVP untuk IndonesiaNEXT Hackathon m
 
 ### AI
 
-- OpenAI Responses API
+- Google Gemini 2.5 Flash (`@google/genai`)
 
 ### Deployment
 
@@ -114,7 +114,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 
 SUPABASE_SERVICE_ROLE_KEY=
 
-OPENAI_API_KEY=
+GOOGLE_API_KEY=
+AI_MODEL=gemini-2.5-flash
 ```
 
 ---
@@ -148,7 +149,7 @@ API Route
 
 ↓
 
-OpenAI Analysis
+Gemini Analysis
 
 ↓
 
@@ -167,3 +168,4 @@ History
 ## License
 
 This project is created for the IndonesiaNEXT Hackathon.
+

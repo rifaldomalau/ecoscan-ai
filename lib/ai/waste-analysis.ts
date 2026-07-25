@@ -1,8 +1,35 @@
-import OpenAI from "openai";
+import { ApiError, GoogleGenAI, type Part } from "@google/genai";
+import fs from "fs";
+import path from "path";
 import { z } from "zod";
 
-const maxImageSize = 5 * 1024 * 1024;
-const supportedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+// ---------------------------------------------------------------------------
+// SDK version – resolved at server startup from the installed package.json.
+// This runs only in the Node.js runtime (API routes), not in the browser.
+// ---------------------------------------------------------------------------
+function readSdkVersion(): string {
+  try {
+    const pkgPath = path.join(
+      path.dirname(require.resolve("@google/genai")),
+      "..",
+      "package.json",
+    );
+    const raw = fs.readFileSync(pkgPath, "utf8");
+    return (JSON.parse(raw) as { version?: string }).version ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+const SDK_VERSION = readSdkVersion();
+
+const DEFAULT_MODEL = "gemini-2.5-flash";
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+// ---------------------------------------------------------------------------
+// Zod schema (unchanged)
+// ---------------------------------------------------------------------------
 
 const wasteAnalysisSchema = z.object({
   itemName: z.string().min(1),
@@ -69,30 +96,113 @@ export type AnalyzeWasteInput = {
   itemName?: string;
 };
 
-function createOpenAIClient() {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not configured.");
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getModel(): string {
+  return process.env.AI_MODEL?.trim() || DEFAULT_MODEL;
+}
+
+function createGeminiClient() {
+  if (!process.env.GOOGLE_API_KEY) {
+    throw new Error("AI analysis is not configured. Please contact support.");
   }
 
-  return new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+  return new GoogleGenAI({
+    apiKey: process.env.GOOGLE_API_KEY,
   });
 }
 
-async function fileToDataUrl(file: File) {
-  if (!supportedImageTypes.has(file.type)) {
+/**
+ * Translate raw SDK/API errors into user-facing messages while logging the
+ * full API error response for debugging.
+ */
+function toGeminiError(error: unknown, model: string): Error {
+  if (error instanceof ApiError) {
+    // Log the full API error so operators can diagnose issues server-side.
+    console.error("[Gemini] API error response", {
+      model,
+      sdkVersion: SDK_VERSION,
+      status: error.status,
+      message: error.message,
+    });
+
+    const lower = error.message.toLowerCase();
+
+    if (
+      error.status === 401 ||
+      error.status === 403 ||
+      lower.includes("api key not valid") ||
+      lower.includes("invalid api key") ||
+      lower.includes("permission denied")
+    ) {
+      return new Error("Invalid Google API key. Check GOOGLE_API_KEY and try again.");
+    }
+
+    if (
+      error.status === 429 ||
+      lower.includes("quota") ||
+      lower.includes("resource_exhausted") ||
+      lower.includes("rate limit")
+    ) {
+      return new Error("Gemini quota exceeded. Please wait and try again.");
+    }
+
+    if (
+      error.status === 404 ||
+      (lower.includes("model") && lower.includes("not found"))
+    ) {
+      return new Error(
+        `Gemini model "${model}" is not available. ` +
+          `Verify AI_MODEL is set to a supported model name (e.g. gemini-2.5-flash).`,
+      );
+    }
+
+    // Any other ApiError: surface the raw message.
+    return new Error(error.message || "Unable to analyze waste.");
+  }
+
+  // Non-API errors (network timeout, our own validation errors, etc.)
+  if (error instanceof Error) {
+    return error;
+  }
+
+  return new Error("Unable to analyze waste.");
+}
+
+async function fileToGenerativePart(file: File): Promise<Part> {
+  if (!SUPPORTED_IMAGE_TYPES.has(file.type)) {
     throw new Error("Unsupported image type. Use JPG, PNG, or WEBP.");
   }
 
-  if (file.size > maxImageSize) {
+  if (file.size > MAX_IMAGE_SIZE) {
     throw new Error("Image must be 5 MB or smaller.");
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  return `data:${file.type};base64,${buffer.toString("base64")}`;
+
+  return {
+    inlineData: {
+      data: buffer.toString("base64"),
+      mimeType: file.type,
+    },
+  };
 }
 
-export async function analyzeWaste(input: AnalyzeWasteInput) {
+function parseGeminiJson(responseText: string) {
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    throw new Error("Gemini returned invalid JSON.");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public API (signature unchanged)
+// ---------------------------------------------------------------------------
+
+export async function analyzeWaste(input: AnalyzeWasteInput): Promise<WasteAnalysis> {
   const itemName = input.itemName?.trim();
   const hasImage = Boolean(input.image && input.image.size > 0);
 
@@ -100,12 +210,19 @@ export async function analyzeWaste(input: AnalyzeWasteInput) {
     throw new Error("Provide an uploaded image or an item name.");
   }
 
-  const content: Array<
-    | { type: "input_text"; text: string }
-    | { type: "input_image"; image_url: string; detail: "auto" }
-  > = [
+  const model = getModel();
+  const startedAt = Date.now();
+
+  // Log configuration on every request so operators can verify what is active.
+  console.info("[Gemini] Starting analysis", {
+    model,
+    sdkVersion: SDK_VERSION,
+    hasImage,
+    hasItemName: Boolean(itemName),
+  });
+
+  const contents: Part[] = [
     {
-      type: "input_text",
       text: [
         "Analyze the waste item for an environmental education app.",
         "Return practical disposal guidance for a general user in Indonesia.",
@@ -117,36 +234,37 @@ export async function analyzeWaste(input: AnalyzeWasteInput) {
   ];
 
   if (input.image && input.image.size > 0) {
-    content.push({
-      type: "input_image",
-      image_url: await fileToDataUrl(input.image),
-      detail: "auto",
-    });
+    contents.push(await fileToGenerativePart(input.image));
   }
 
-  const response = await createOpenAIClient().responses.create({
-    model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-    input: [
-      {
-        role: "developer",
-        content:
+  try {
+    const response = await createGeminiClient().models.generateContent({
+      model,
+      contents,
+      config: {
+        systemInstruction:
           "You classify waste items and must respond only with valid JSON matching the provided schema.",
+        responseMimeType: "application/json",
+        responseJsonSchema: wasteAnalysisJsonSchema,
       },
-      {
-        role: "user",
-        content,
-      },
-    ],
-    text: {
-      format: {
-        type: "json_schema",
-        name: "waste_analysis",
-        strict: true,
-        schema: wasteAnalysisJsonSchema,
-      },
-    },
-  });
+    });
 
-  const parsedJson = JSON.parse(response.output_text);
-  return wasteAnalysisSchema.parse(parsedJson);
+    const responseText = response.text;
+
+    if (!responseText) {
+      throw new Error("Gemini returned an empty analysis response.");
+    }
+
+    const parsedJson = parseGeminiJson(responseText);
+    return wasteAnalysisSchema.parse(parsedJson);
+  } catch (error) {
+    throw toGeminiError(error, model);
+  } finally {
+    console.info("[Gemini] Analysis request completed", {
+      model,
+      sdkVersion: SDK_VERSION,
+      hasImage,
+      durationMs: Date.now() - startedAt,
+    });
+  }
 }
