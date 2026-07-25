@@ -14,54 +14,61 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import type { WasteAnalysis } from "@/lib/ai/waste-analysis";
 
 const maxImageSize = 5 * 1024 * 1024;
 
+type AnalyzeErrorResponse = {
+  error?: string;
+};
+
 export default function ScanPage() {
-  const [imageName, setImageName] = useState("");
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [manualInput, setManualInput] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [status, setStatus] = useState("");
+  const [analysis, setAnalysis] = useState<WasteAnalysis | null>(null);
+
+  const imageName = selectedImage?.name || "";
 
   function handleImageChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
     setError("");
-    setStatus("");
+    setAnalysis(null);
 
     if (!file) {
-      setImageName("");
+      setSelectedImage(null);
       return;
     }
 
     if (!file.type.startsWith("image/")) {
       event.target.value = "";
-      setImageName("");
+      setSelectedImage(null);
       setError("Please upload an image file.");
       return;
     }
 
     if (file.size > maxImageSize) {
       event.target.value = "";
-      setImageName("");
+      setSelectedImage(null);
       setError("Image must be 5 MB or smaller.");
       return;
     }
 
-    setImageName(file.name);
+    setSelectedImage(file);
   }
 
   function handleManualInputChange(value: string) {
     setManualInput(value);
     setError("");
-    setStatus("");
+    setAnalysis(null);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const hasImage = imageName.length > 0;
+    const hasImage = Boolean(selectedImage);
     const hasManualInput = manualInput.trim().length > 0;
 
     if (!hasImage && !hasManualInput) {
@@ -69,14 +76,43 @@ export default function ScanPage() {
       return;
     }
 
+    const formData = new FormData();
+
+    if (selectedImage) {
+      formData.append("image", selectedImage);
+    }
+
+    if (hasManualInput) {
+      formData.append("itemName", manualInput.trim());
+    }
+
     setError("");
-    setStatus("");
+    setAnalysis(null);
     setIsLoading(true);
 
-    window.setTimeout(() => {
+    try {
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json()) as AnalyzeErrorResponse;
+        throw new Error(payload.error || "Unable to analyze waste.");
+      }
+
+      const result = (await response.json()) as WasteAnalysis;
+      setAnalysis(result);
+    } catch (submitError) {
+      const message =
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to analyze waste.";
+
+      setError(message);
+    } finally {
       setIsLoading(false);
-      setStatus("Placeholder analysis is ready for the next integration step.");
-    }, 900);
+    }
   }
 
   return (
@@ -88,8 +124,8 @@ export default function ScanPage() {
             Scan Waste
           </h1>
           <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
-            Upload a waste image or enter the item name manually to prepare an
-            analysis request.
+            Upload a waste image or enter the item name manually to analyze the
+            item.
           </p>
         </div>
 
@@ -112,7 +148,7 @@ export default function ScanPage() {
                           <ImageUp className="size-5" aria-hidden="true" />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-medium">
+                          <p className="truncate text-sm font-medium">
                             {imageName || "Choose an image"}
                           </p>
                           <p className="text-xs text-muted-foreground">
@@ -123,7 +159,7 @@ export default function ScanPage() {
                       <Input
                         id="waste-image"
                         type="file"
-                        accept="image/*"
+                        accept="image/png,image/jpeg,image/webp"
                         className="max-w-xs bg-background"
                         disabled={isLoading}
                         onChange={handleImageChange}
@@ -152,13 +188,11 @@ export default function ScanPage() {
                   </p>
                 ) : null}
 
-                {status ? (
-                  <p className="text-sm text-muted-foreground" role="status">
-                    {status}
-                  </p>
-                ) : null}
-
-                <Button type="submit" className="w-full sm:w-fit" disabled={isLoading}>
+                <Button
+                  type="submit"
+                  className="w-full sm:w-fit"
+                  disabled={isLoading}
+                >
                   {isLoading ? (
                     <Loader2 className="size-4 animate-spin" aria-hidden="true" />
                   ) : (
@@ -177,25 +211,86 @@ export default function ScanPage() {
                 Input Summary
               </CardTitle>
               <CardDescription>
-                Placeholder preview before AI integration.
+                Current input prepared for analysis.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
               <div className="rounded-lg border bg-background p-3">
                 <p className="font-medium">Selected image</p>
-                <p className="mt-1 text-muted-foreground">
+                <p className="mt-1 break-words text-muted-foreground">
                   {imageName || "No image selected"}
                 </p>
               </div>
               <div className="rounded-lg border bg-background p-3">
                 <p className="font-medium">Manual input</p>
-                <p className="mt-1 text-muted-foreground">
+                <p className="mt-1 break-words text-muted-foreground">
                   {manualInput.trim() || "No description entered"}
                 </p>
               </div>
             </CardContent>
           </Card>
         </div>
+
+        {analysis ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Analysis Result</CardTitle>
+              <CardDescription>
+                Validated JSON returned by the AI service.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <dl className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-lg border bg-background p-3">
+                  <dt className="text-sm font-medium">Item Name</dt>
+                  <dd className="mt-1 text-sm text-muted-foreground">
+                    {analysis.itemName}
+                  </dd>
+                </div>
+                <div className="rounded-lg border bg-background p-3">
+                  <dt className="text-sm font-medium">Category</dt>
+                  <dd className="mt-1 text-sm text-muted-foreground">
+                    {analysis.category}
+                  </dd>
+                </div>
+                <div className="rounded-lg border bg-background p-3">
+                  <dt className="text-sm font-medium">Recyclable</dt>
+                  <dd className="mt-1 text-sm text-muted-foreground">
+                    {analysis.recyclable ? "Yes" : "No"}
+                  </dd>
+                </div>
+                <div className="rounded-lg border bg-background p-3">
+                  <dt className="text-sm font-medium">Confidence</dt>
+                  <dd className="mt-1 text-sm text-muted-foreground">
+                    {analysis.confidence}%
+                  </dd>
+                </div>
+                <div className="rounded-lg border bg-background p-3 sm:col-span-2">
+                  <dt className="text-sm font-medium">Disposal Method</dt>
+                  <dd className="mt-1 text-sm text-muted-foreground">
+                    {analysis.disposalMethod}
+                  </dd>
+                </div>
+                <div className="rounded-lg border bg-background p-3 sm:col-span-2">
+                  <dt className="text-sm font-medium">Environmental Impact</dt>
+                  <dd className="mt-1 text-sm text-muted-foreground">
+                    {analysis.environmentalImpact}
+                  </dd>
+                </div>
+                <div className="rounded-lg border bg-background p-3 sm:col-span-2">
+                  <dt className="text-sm font-medium">Reuse Ideas</dt>
+                  <dd className="mt-2">
+                    <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                      {analysis.reuseIdeas.map((idea) => (
+                        <li key={idea}>{idea}</li>
+                      ))}
+                    </ul>
+                  </dd>
+                </div>
+              </dl>
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
     </main>
   );
