@@ -1,4 +1,5 @@
 import {
+  CheckCircle2,
   ClipboardList,
   Clock3,
   Home,
@@ -6,6 +7,7 @@ import {
   Recycle,
   ScanLine,
   Settings,
+  Trophy,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -38,6 +40,33 @@ const navigationItems = [
     label: "Eco Score",
     icon: Leaf,
     active: false,
+  },
+];
+
+const statisticCards = [
+  {
+    title: "Total Scans",
+    value: "24",
+    description: "Waste items scanned",
+    icon: ClipboardList,
+  },
+  {
+    title: "Eco Score",
+    value: "68",
+    description: "Eco Explorer level",
+    icon: Trophy,
+  },
+  {
+    title: "Recyclable Items",
+    value: "16",
+    description: "Marked as recyclable",
+    icon: CheckCircle2,
+  },
+  {
+    title: "Last Scan",
+    value: "Today",
+    description: "Plastic bottle",
+    icon: Clock3,
   },
 ];
 
@@ -111,34 +140,27 @@ export default function DashboardPage() {
         </header>
 
         <main className="px-4 py-6 sm:px-6 lg:px-8">
-          <section className="grid gap-4 md:grid-cols-3">
-            <Card>
-              <CardHeader>
-                <CardTitle>Total Scans</CardTitle>
-                <CardDescription>Placeholder metric</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold">--</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Eco Score</CardTitle>
-                <CardDescription>Placeholder progress</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold">--</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Current Level</CardTitle>
-                <CardDescription>Placeholder level</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-semibold">--</p>
-              </CardContent>
-            </Card>
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {statisticCards.map((statistic) => (
+              <Card key={statistic.title}>
+                <CardHeader className="flex-row items-start justify-between gap-3">
+                  <div className="grid gap-1">
+                    <CardDescription>{statistic.title}</CardDescription>
+                    <CardTitle className="text-3xl font-semibold">
+                      {statistic.value}
+                    </CardTitle>
+                  </div>
+                  <div className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                    <statistic.icon className="size-4" aria-hidden="true" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    {statistic.description}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
           </section>
 
           <section className="mt-6 grid gap-4 xl:grid-cols-[1fr_22rem]">
