@@ -9,8 +9,10 @@ import {
   Settings,
   Trophy,
 } from "lucide-react";
+import { redirect } from "next/navigation";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,6 +21,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { createClient } from "@/lib/supabase/server";
 
 const navigationItems = [
   {
@@ -43,34 +46,103 @@ const navigationItems = [
   },
 ];
 
-const statisticCards = [
-  {
-    title: "Total Scans",
-    value: "24",
-    description: "Waste items scanned",
-    icon: ClipboardList,
-  },
-  {
-    title: "Eco Score",
-    value: "68",
-    description: "Eco Explorer level",
-    icon: Trophy,
-  },
-  {
-    title: "Recyclable Items",
-    value: "16",
-    description: "Marked as recyclable",
-    icon: CheckCircle2,
-  },
-  {
-    title: "Last Scan",
-    value: "Today",
-    description: "Plastic bottle",
-    icon: Clock3,
-  },
-];
+type ScanHistoryRecord = {
+  item_name: string;
+  category: string;
+  recyclable: boolean;
+  created_at: string;
+};
 
-export default function DashboardPage() {
+function getEcoLevel(score: number) {
+  if (score > 100) {
+    return "Earth Guardian";
+  }
+
+  if (score > 50) {
+    return "Eco Hero";
+  }
+
+  if (score > 20) {
+    return "Eco Explorer";
+  }
+
+  return "Beginner";
+}
+
+function formatScanDate(value?: string) {
+  if (!value) {
+    return "No scans yet";
+  }
+
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
+function getCategoryCounts(scans: ScanHistoryRecord[]) {
+  return scans.reduce<Record<string, number>>((counts, scan) => {
+    counts[scan.category] = (counts[scan.category] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+export default async function DashboardPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  const { data, error } = await supabase
+    .from("scan_history")
+    .select("item_name,category,recyclable,created_at")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error("Unable to load dashboard statistics.");
+  }
+
+  const scans = (data ?? []) as ScanHistoryRecord[];
+  const totalScans = scans.length;
+  const recyclableItems = scans.filter((scan) => scan.recyclable).length;
+  const ecoScore = totalScans;
+  const lastScan = scans[0];
+  const hasScans = totalScans > 0;
+  const categoryCounts = Object.entries(getCategoryCounts(scans));
+  const avatarFallback = user.email?.charAt(0).toUpperCase() || "U";
+
+  const statisticCards = [
+    {
+      title: "Total Scans",
+      value: totalScans.toString(),
+      description: hasScans ? "Waste items scanned" : "No scans recorded yet",
+      icon: ClipboardList,
+    },
+    {
+      title: "Eco Score",
+      value: ecoScore.toString(),
+      description: getEcoLevel(ecoScore),
+      icon: Trophy,
+    },
+    {
+      title: "Recyclable Items",
+      value: recyclableItems.toString(),
+      description: hasScans ? "Marked as recyclable" : "Start scanning to track this",
+      icon: CheckCircle2,
+    },
+    {
+      title: "Last Scan",
+      value: lastScan?.item_name || "None",
+      description: formatScanDate(lastScan?.created_at),
+      icon: Clock3,
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-muted/30">
       <aside className="fixed inset-y-0 left-0 hidden w-64 border-r bg-background lg:flex lg:flex-col">
@@ -120,7 +192,7 @@ export default function DashboardPage() {
                 New Scan
               </Button>
               <Avatar>
-                <AvatarFallback>U</AvatarFallback>
+                <AvatarFallback>{avatarFallback}</AvatarFallback>
               </Avatar>
             </div>
           </div>
@@ -144,9 +216,9 @@ export default function DashboardPage() {
             {statisticCards.map((statistic) => (
               <Card key={statistic.title}>
                 <CardHeader className="flex-row items-start justify-between gap-3">
-                  <div className="grid gap-1">
+                  <div className="grid min-w-0 gap-1">
                     <CardDescription>{statistic.title}</CardDescription>
-                    <CardTitle className="text-3xl font-semibold">
+                    <CardTitle className="truncate text-3xl font-semibold">
                       {statistic.value}
                     </CardTitle>
                   </div>
@@ -168,13 +240,40 @@ export default function DashboardPage() {
               <CardHeader>
                 <CardTitle>Scan Activity</CardTitle>
                 <CardDescription>
-                  Recent scan summaries will appear here.
+                  {hasScans
+                    ? "Your most recent scan summary."
+                    : "Your scan activity will appear here."}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed bg-background text-sm text-muted-foreground">
-                  Placeholder content
-                </div>
+                {lastScan ? (
+                  <div className="grid gap-3 rounded-lg border bg-background p-4 text-sm sm:grid-cols-2">
+                    <div>
+                      <p className="text-muted-foreground">Item Name</p>
+                      <p className="mt-1 font-medium">{lastScan.item_name}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Category</p>
+                      <p className="mt-1 font-medium">{lastScan.category}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Recyclable</p>
+                      <Badge className="mt-1" variant={lastScan.recyclable ? "secondary" : "outline"}>
+                        {lastScan.recyclable ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Scan Date</p>
+                      <p className="mt-1 font-medium">
+                        {formatScanDate(lastScan.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed bg-background px-4 text-center text-sm text-muted-foreground">
+                    Analyze your first waste item to populate the dashboard.
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -182,34 +281,28 @@ export default function DashboardPage() {
               <CardHeader>
                 <CardTitle>Waste Categories</CardTitle>
                 <CardDescription>
-                  Category breakdown will be added later.
+                  {hasScans
+                    ? "Categories from your saved scans."
+                    : "Categories will appear after your first scan."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {["Organic", "Plastic", "Paper", "Electronic"].map((item) => (
-                  <div
-                    key={item}
-                    className="flex items-center justify-between rounded-lg border bg-background px-3 py-2"
-                  >
-                    <span className="text-sm font-medium">{item}</span>
-                    <span className="text-sm text-muted-foreground">--</span>
+                {categoryCounts.length > 0 ? (
+                  categoryCounts.map(([category, count]) => (
+                    <div
+                      key={category}
+                      className="flex items-center justify-between rounded-lg border bg-background px-3 py-2"
+                    >
+                      <span className="text-sm font-medium">{category}</span>
+                      <span className="text-sm text-muted-foreground">{count}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-lg border border-dashed bg-background px-3 py-8 text-center text-sm text-muted-foreground">
+                    No category data yet.
                   </div>
-                ))}
+                )}
               </CardContent>
-            </Card>
-          </section>
-
-          <section className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <ClipboardList className="size-4" aria-hidden="true" />
-                  Next Steps
-                </CardTitle>
-                <CardDescription>
-                  Scan actions and saved history will be added later.
-                </CardDescription>
-              </CardHeader>
             </Card>
           </section>
         </main>
