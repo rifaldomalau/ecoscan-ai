@@ -3,17 +3,16 @@ import {
   ClipboardList,
   Clock3,
   Home,
-  Leaf,
   Recycle,
   ScanLine,
-  Settings,
   Trophy,
 } from "lucide-react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -22,27 +21,26 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { calculateEcoScore, getEcoLevel } from "@/lib/eco-score";
+import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 
 const navigationItems = [
   {
     label: "Overview",
+    href: "/dashboard",
     icon: Home,
     active: true,
   },
   {
     label: "Scan Waste",
+    href: "/scan",
     icon: ScanLine,
     active: false,
   },
   {
     label: "History",
+    href: "/history",
     icon: Clock3,
-    active: false,
-  },
-  {
-    label: "Eco Score",
-    icon: Leaf,
     active: false,
   },
 ];
@@ -126,7 +124,9 @@ export default async function DashboardPage() {
     {
       title: "Recyclable Items",
       value: recyclableItems.toString(),
-      description: hasScans ? "Marked as recyclable" : "Start scanning to track this",
+      description: hasScans
+        ? "Marked as recyclable"
+        : "Start scanning to track this",
       icon: CheckCircle2,
     },
     {
@@ -148,22 +148,19 @@ export default async function DashboardPage() {
         </div>
         <nav className="flex flex-1 flex-col gap-1 px-3 py-4">
           {navigationItems.map((item) => (
-            <Button
+            <Link
               key={item.label}
-              variant={item.active ? "secondary" : "ghost"}
-              className="h-10 justify-start gap-3 px-3"
+              href={item.href}
+              className={cn(
+                buttonVariants({ variant: item.active ? "secondary" : "ghost" }),
+                "h-10 justify-start gap-3 px-3",
+              )}
             >
               <item.icon className="size-4" aria-hidden="true" />
               {item.label}
-            </Button>
+            </Link>
           ))}
         </nav>
-        <div className="border-t p-4">
-          <Button variant="ghost" className="h-10 w-full justify-start gap-3 px-3">
-            <Settings className="size-4" aria-hidden="true" />
-            Settings
-          </Button>
-        </div>
       </aside>
 
       <div className="lg:pl-64">
@@ -181,10 +178,13 @@ export default async function DashboardPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <Button className="hidden sm:inline-flex">
+              <Link
+                href="/scan"
+                className={cn(buttonVariants(), "hidden sm:inline-flex")}
+              >
                 <ScanLine className="size-4" aria-hidden="true" />
                 New Scan
-              </Button>
+              </Link>
               <Avatar>
                 <AvatarFallback>{avatarFallback}</AvatarFallback>
               </Avatar>
@@ -192,15 +192,20 @@ export default async function DashboardPage() {
           </div>
           <nav className="flex gap-1 overflow-x-auto px-4 pb-3 sm:px-6 lg:hidden">
             {navigationItems.map((item) => (
-              <Button
+              <Link
                 key={item.label}
-                variant={item.active ? "secondary" : "ghost"}
-                size="sm"
-                className="shrink-0 gap-2"
+                href={item.href}
+                className={cn(
+                  buttonVariants({
+                    variant: item.active ? "secondary" : "ghost",
+                    size: "sm",
+                  }),
+                  "shrink-0 gap-2",
+                )}
               >
                 <item.icon className="size-4" aria-hidden="true" />
                 {item.label}
-              </Button>
+              </Link>
             ))}
           </nav>
         </header>
@@ -252,7 +257,10 @@ export default async function DashboardPage() {
                     </div>
                     <div>
                       <p className="text-muted-foreground">Recyclable</p>
-                      <Badge className="mt-1" variant={lastScan.recyclable ? "secondary" : "outline"}>
+                      <Badge
+                        className="mt-1"
+                        variant={lastScan.recyclable ? "secondary" : "outline"}
+                      >
                         {lastScan.recyclable ? "Yes" : "No"}
                       </Badge>
                     </div>
@@ -288,12 +296,14 @@ export default async function DashboardPage() {
                       className="flex items-center justify-between rounded-lg border bg-background px-3 py-2"
                     >
                       <span className="text-sm font-medium">{category}</span>
-                      <span className="text-sm text-muted-foreground">{count}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {count}
+                      </span>
                     </div>
                   ))
                 ) : (
                   <div className="rounded-lg border border-dashed bg-background px-3 py-8 text-center text-sm text-muted-foreground">
-                    No category data yet.
+                    Analyze an item to see category totals.
                   </div>
                 )}
               </CardContent>

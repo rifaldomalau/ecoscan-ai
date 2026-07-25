@@ -24,7 +24,8 @@ const wasteAnalysisJsonSchema = {
     },
     category: {
       type: "string",
-      description: "Waste category, such as plastic, paper, organic, metal, glass, electronic, hazardous, or other.",
+      description:
+        "Waste category, such as plastic, paper, organic, metal, glass, electronic, hazardous, or other.",
     },
     recyclable: {
       type: "boolean",
@@ -68,9 +69,15 @@ export type AnalyzeWasteInput = {
   itemName?: string;
 };
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+function createOpenAIClient() {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not configured.");
+  }
+
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+}
 
 async function fileToDataUrl(file: File) {
   if (!supportedImageTypes.has(file.type)) {
@@ -102,7 +109,9 @@ export async function analyzeWaste(input: AnalyzeWasteInput) {
       text: [
         "Analyze the waste item for an environmental education app.",
         "Return practical disposal guidance for a general user in Indonesia.",
-        itemName ? `User-provided item name: ${itemName}` : "No item name was provided.",
+        itemName
+          ? `User-provided item name: ${itemName}`
+          : "No item name was provided.",
       ].join("\n"),
     },
   ];
@@ -115,7 +124,7 @@ export async function analyzeWaste(input: AnalyzeWasteInput) {
     });
   }
 
-  const response = await openai.responses.create({
+  const response = await createOpenAIClient().responses.create({
     model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
     input: [
       {

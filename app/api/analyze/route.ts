@@ -113,8 +113,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const message =
+    const rawMessage =
       error instanceof Error ? error.message : "Unable to analyze waste.";
+    const message = rawMessage.startsWith("OPENAI_API_KEY")
+      ? "AI analysis is not configured. Please contact support."
+      : rawMessage;
     const status =
       message.startsWith("Provide") ||
       message.startsWith("Unsupported") ||
@@ -125,3 +128,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status });
   }
 }
+
