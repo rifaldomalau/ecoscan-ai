@@ -40,6 +40,8 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <CardTitle>Login to EcoScan AI</CardTitle>
           <CardDescription>
             Use your account to continue to the dashboard.
+            Username: user@test.com
+            Password: user
           </CardDescription>
         </CardHeader>
         <CardContent>
